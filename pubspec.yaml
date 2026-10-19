@@ -1,0 +1,25 @@
+name: esprit_move
+description: "ESPRIT Move - application mobile de sport communautaire du campus (Flutter + SQLite)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  sqflite_common_ffi: ^2.3.3  # SQLite sur Windows/Linux/macOS (test sur PC)
+  sqflite: ^2.3.3          # base de donnees SQLite locale (telephone)
+  path: ^1.9.0             # construire le chemin du fichier .db
+  crypto: ^3.0.3           # hacher les mots de passe (sha256)
+  shared_preferences: ^2.2.3  # memoriser l'utilisateur connecte + le theme
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
