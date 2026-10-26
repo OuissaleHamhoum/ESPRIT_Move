@@ -68,6 +68,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       case JoinResult.cancelled:
         AppSnack.show(context, 'Événement annulé', error: true);
         break;
+      case JoinResult.past:
+        AppSnack.show(context, 'Événement terminé', error: true);
+        break;
       case JoinResult.alreadyJoined:
         break;
     }
@@ -97,7 +100,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Future<void> _delete() async {
     final ok = await ConfirmSheet.show(context,
         title: 'Supprimer cet événement ?',
-        message: 'Les inscrits seront prévenus. Action définitive.');
+        message: 'Les inscriptions seront supprimées. Action définitive.');
     if (!ok) return;
     await EventDao.delete(widget.eventId);
     if (!mounted) return;
@@ -171,6 +174,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 // Bouton principal : Rejoindre / Quitter / Complet / Annule
                 if (e.isCancelled)
                   const AppButton(label: 'Événement annulé', onPressed: null)
+                else if (e.isPast)
+                  AppButton(
+                      label: e.joined ? 'Événement terminé · vous y étiez' : 'Événement terminé',
+                      onPressed: null)
                 else if (e.joined)
                   AppButton(label: 'Quitter l’événement', outlined: true, onPressed: _leave)
                 else if (e.isFull)

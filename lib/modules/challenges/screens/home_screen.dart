@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/app_routes.dart';
 import '../../../core/session/session.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_top_bar.dart';
 import '../../../core/widgets/stat_tile.dart';
 import '../data/home_dao.dart';
@@ -74,14 +73,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 8),
                   Text('Fil de la communauté', style: Theme.of(context).textTheme.titleMedium),
                   for (final line in d.feed)
-                    Card(child: ListTile(leading: const Text('🏃', style: TextStyle(fontSize: 22)), title: Text(line))),
-                  if (Session.isAdmin) ...[
-                    const SizedBox(height: 12),
-                    AppButton(
-                        label: 'Tableau de bord admin',
-                        outlined: true,
-                        onPressed: () => Navigator.pushNamed(context, AppRoutes.dashboard)),
-                  ],
+                    Card(child: ListTile(leading: Text(line.icon, style: const TextStyle(fontSize: 22)), title: Text(line.text))),
+                  if (d.feed.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Aucune activité pour le moment. Lancez la première ! 🏃',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ),
                   const SizedBox(height: 60),
                 ],
               ),
@@ -98,7 +96,8 @@ class _HomeScreenState extends State<HomeScreen> {
           InkWell(
             onTap: () => _open(AppRoutes.rewards),
             child: Chip(
-              label: Text('⭐ ${d.points} pts',
+              avatar: const Icon(Icons.star, color: AppColors.gold, size: 18),
+              label: Text('${d.points} pts',
                   style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold)),
             ),
           ),

@@ -13,5 +13,6 @@ class ChatMessage {
   final int userId;
   final String author;
   final String text;
-  const ChatMessage(this.id, this.userId, this.author, this.text);
+  final DateTime sentAt;
+  const ChatMessage(this.id, this.userId, this.author, this.text, this.sentAt);
 }

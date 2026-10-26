@@ -90,7 +90,7 @@ class HomeData {
   final int activeStudents;
   final double campusKm;
   final int eventsCount;
-  final List<String> feed; // phrases du fil de la communaute
+  final List<FeedItem> feed; // fil de la communaute
   const HomeData({
     required this.userName,
     required this.points,
@@ -105,4 +105,27 @@ class HomeData {
   });
 
   static const weeklyGoalKm = 40.0; // objectif hebdomadaire du prototype
+}
+
+/// Une ligne du fil : pictogramme du sport + phrase.
+class FeedItem {
+  final String icon;
+  final String text;
+  const FeedItem(this.icon, this.text);
+}
+
+/// Chiffres de l'accueil administrateur.
+class AdminSummary {
+  final int students;
+  final int pendingCards;
+  final int activeFacilities;
+  final int upcomingBookings;
+  final List<FeedItem> today; // reservations du jour
+  const AdminSummary({
+    required this.students,
+    required this.pendingCards,
+    required this.activeFacilities,
+    required this.upcomingBookings,
+    required this.today,
+  });
 }

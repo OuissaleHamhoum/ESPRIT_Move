@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/session/session.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/app_snack.dart';
 import '../../../core/widgets/chip_selector.dart';
 import '../../../core/widgets/guest_gate.dart';
 import '../data/activity_dao.dart';
@@ -52,14 +51,18 @@ class _RecChooseScreenState extends State<RecChooseScreen> {
               onPressed: () => Navigator.pop(context), child: const Text('Fermer')),
         ],
       ),
-      body: Padding(
+      body: Container(
+        width: double.infinity, // pleine largeur : GO bien centre
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            ChipSelector(
-              options: ActivityTypes.all,
-              selected: {_type},
-              onTap: (t) => setState(() => _type = t),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ChipSelector(
+                options: ActivityTypes.all,
+                selected: {_type},
+                onTap: (t) => setState(() => _type = t),
+              ),
             ),
             const Spacer(),
             GestureDetector(
@@ -85,12 +88,6 @@ class _RecChooseScreenState extends State<RecChooseScreen> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const Spacer(),
-            // petit rappel : la distance est simulee (prototype)
-            TextButton(
-              onPressed: () => AppSnack.show(context,
-                  'Prototype : la distance est simulée (voir GUIDE.md pour le GPS)'),
-              child: const Text('ℹ️ Mode démonstration'),
-            ),
           ],
         ),
       ),

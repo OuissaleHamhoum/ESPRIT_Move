@@ -42,4 +42,15 @@ class BadgeDao {
             r['cost'] as int))
         .toList();
   }
+
+  // ---------- Recompenses (admin) ----------
+  static Future<void> insertReward(String name, String icon, int cost) async {
+    final db = await AppDatabase.db;
+    await db.insert('rewards', {'name': name, 'icon': icon, 'cost': cost});
+  }
+
+  static Future<void> deleteReward(int id) async {
+    final db = await AppDatabase.db;
+    await db.delete('rewards', where: 'id = ?', whereArgs: [id]);
+  }
 }

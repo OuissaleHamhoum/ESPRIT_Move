@@ -12,5 +12,5 @@ void main() => runModule(
         AppRoutes.main: (_) => UsersRoutes.profileTab,
       },
       initialRoute: AppRoutes.main,
-      loginAsUserId: 1,
+      loginAsUserId: 0, // creez un compte etudiant depuis l'app, ou 1 = admin
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/app_routes.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/services/reward_engine.dart';
 import '../../../core/session/session.dart';
 import '../../../core/theme/app_colors.dart';
@@ -24,11 +25,22 @@ class SignUpScreen extends StatefulWidget {
 
 class _SignUpScreenState extends State<SignUpScreen> {
   static const _interestOptions = [
-    'Running', 'Football', 'Basket', 'Yoga', 'Muscu', 'Vélo', 'Natation', 'Tennis'
+    'Running',
+    'Football',
+    'Basket',
+    'Yoga',
+    'Muscu',
+    'Vélo',
+    'Natation',
+    'Tennis',
   ];
   static const _campuses = ['Campus Ghazela', 'Campus Charguia'];
   static const _filieres = [
-    'Informatique', 'Génie civil', 'Télécommunications', 'Business', 'Mécanique'
+    'Informatique',
+    'Génie civil',
+    'Télécommunications',
+    'Business',
+    'Mécanique',
   ];
 
   final _formKey = GlobalKey<FormState>();
@@ -43,7 +55,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _city = TextEditingController(text: 'Tunis');
   String _filiere = _filieres.first;
   String _campus = _campuses.first;
-  bool _cardScanned = false;
   bool _locationAllowed = false;
   final Set<String> _interests = {};
   final Set<int> _groupIds = {};
@@ -66,19 +77,39 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   // ---------- Navigation entre les etapes ----------
+  /// SU-03 : demande la permission de localisation au systeme.
+  Future<void> _askLocation() async {
+    final error = await LocationService.ensurePermission();
+    if (!mounted) return;
+    if (error != null) {
+      AppSnack.show(context, error, error: true);
+      return;
+    }
+    setState(() => _locationAllowed = true);
+  }
+
   Future<void> _next() async {
+    if (_saving) return; // evite un double appui (etape sautee / compte en double)
     if (!_formKey.currentState!.validate()) return; // erreurs en rouge
     if (_step == 0) {
+      setState(() => _saving = true);
       final exists = await UserDao.emailExists(_email.text.trim());
       if (!mounted) return;
+      setState(() => _saving = false);
       if (exists) {
         AppSnack.show(context, 'Cet e-mail est déjà utilisé', error: true);
         return;
       }
     }
-    if (_step == 1 && !_cardScanned) {
-      AppSnack.show(context, 'Scannez votre carte pour continuer', error: true);
-      return;
+    if (_step == 1) {
+      setState(() => _saving = true);
+      final taken = await UserDao.cardNumberTaken(_cardNumber.text.trim());
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (taken) {
+        AppSnack.show(context, 'Ce numéro de carte est déjà utilisé', error: true);
+        return;
+      }
     }
     if (_step == 4) {
       await _createAccount();
@@ -98,17 +129,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
   // ---------- CREATE : on enregistre le compte ----------
   Future<void> _createAccount() async {
     setState(() => _saving = true);
-    final id = await UserDao.signUp(
-      name: _name.text.trim(),
-      email: _email.text.trim(),
-      password: _password.text,
-      cardNumber: _cardNumber.text.trim(),
-      filiere: _filiere,
-      cardVerified: _cardScanned,
-      city: _city.text.trim(),
-      campus: _campus,
-      interests: _interests,
-    );
+    final int id;
+    try {
+      id = await UserDao.signUp(
+        name: _name.text.trim(),
+        email: _email.text.trim(),
+        password: _password.text,
+        cardNumber: _cardNumber.text.trim(),
+        filiere: _filiere,
+        city: _city.text.trim(),
+        campus: _campus,
+        interests: _interests,
+      );
+    } catch (_) {
+      // ex. UNIQUE constraint : e-mail pris entre-temps
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _step = 0;
+      });
+      AppSnack.show(context, 'Impossible de créer le compte (e-mail déjà utilisé ?)', error: true);
+      return;
+    }
     await UserDao.joinGroups(id, _groupIds);
     await RewardEngine.addPoints(id, RewardEngine.signupPoints); // +100 pts
     await Session.login(id: id, name: _name.text.trim(), role: 'student');
@@ -139,10 +181,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             LinearProgressIndicator(
-                value: (_step + 1) / 5,
-                color: AppColors.red,
-                minHeight: 4,
-                borderRadius: BorderRadius.circular(4)),
+              value: (_step + 1) / 5,
+              color: AppColors.red,
+              minHeight: 4,
+              borderRadius: BorderRadius.circular(4),
+            ),
             const SizedBox(height: 20),
             ..._stepContent(),
             const SizedBox(height: 8),
@@ -180,16 +223,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
           Text('Crée ton compte', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
           AppTextField(
-              label: 'Nom complet',
-              controller: _name,
-              validator: (v) => AppTextField.notEmpty(v, 'Le nom est obligatoire')),
+            label: 'Nom complet',
+            controller: _name,
+            validator: (v) => AppTextField.notEmpty(v, 'Le nom est obligatoire'),
+          ),
           AppTextField(
             label: 'E-mail ESPRIT',
             controller: _email,
             keyboardType: TextInputType.emailAddress,
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'L’e-mail est obligatoire';
-              if (!v.contains('@') || !v.contains('.')) return 'E-mail invalide';
+              if (!RegExp(r'^[\w.+-]+@[\w-]+(\.[\w-]+)+$').hasMatch(v.trim())) {
+                return 'E-mail invalide';
+              }
               return null;
             },
           ),
@@ -197,34 +243,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
             label: 'Mot de passe (6 caractères min.)',
             controller: _password,
             obscure: true,
-            validator: (v) =>
-                (v == null || v.length < 6) ? 'Au moins 6 caractères' : null,
+            validator: (v) => (v == null || v.length < 6) ? 'Au moins 6 caractères' : null,
           ),
         ];
       case 1: // SU-02 Carte etudiante
         return [
-          Card(
+          const Card(
             child: ListTile(
-              leading: Icon(_cardScanned ? Icons.verified : Icons.badge_outlined,
-                  color: _cardScanned ? AppColors.green : AppColors.grey),
-              title: const Text('Carte étudiante ESPRIT'),
-              subtitle: Text(_cardScanned ? 'Vérifiée ✔' : 'Non vérifiée'),
+              leading: Icon(Icons.badge_outlined, color: AppColors.grey),
+              title: Text('Carte étudiante ESPRIT'),
+              subtitle: Text('Votre numéro sera vérifié par l’administration. '
+                  'La réservation des terrains est possible après validation.'),
+              isThreeLine: true,
             ),
-          ),
-          const SizedBox(height: 8),
-          AppButton(
-            label: 'Scanner ma carte',
-            icon: Icons.camera_alt_outlined,
-            outlined: true,
-            // PROTOTYPE : simulation. Le vrai scan = package camera / ML Kit.
-            onPressed: () => setState(() => _cardScanned = true),
           ),
           const SizedBox(height: 14),
           AppTextField(
-              label: 'Numéro de carte',
-              controller: _cardNumber,
-              hint: 'ESP-482913',
-              validator: (v) => AppTextField.notEmpty(v, 'Numéro obligatoire')),
+            label: 'Numéro de carte étudiante',
+            controller: _cardNumber,
+            hint: 'Tel qu’il figure sur votre carte',
+            validator: (v) => AppTextField.notEmpty(v, 'Numéro obligatoire'),
+          ),
           Text('Filière', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 4),
           DropdownButtonFormField<String>(
@@ -238,13 +277,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
         return [
           Text('Localisation', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
-          Text('Pour te proposer les événements proches et activer Beacon.',
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            'Pour te proposer les événements proches et activer Beacon.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 16),
           AppTextField(
-              label: 'Ville',
-              controller: _city,
-              validator: (v) => AppTextField.notEmpty(v, 'La ville est obligatoire')),
+            label: 'Ville',
+            controller: _city,
+            validator: (v) => AppTextField.notEmpty(v, 'La ville est obligatoire'),
+          ),
           Text('Campus', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 4),
           DropdownButtonFormField<String>(
@@ -253,12 +295,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
             onChanged: (v) => setState(() => _campus = v!),
           ),
           const SizedBox(height: 14),
-          // PROTOTYPE : on memorise juste le choix. Aucune position n'est stockee
+          // Vraie demande de permission GPS. Aucune position n'est stockee ici
           // (regle du PDF : pas de donnee de position sans consentement).
           AppButton(
             label: _locationAllowed ? '✔ Localisation autorisée' : 'Autoriser la localisation',
             outlined: true,
-            onPressed: () => setState(() => _locationAllowed = true),
+            onPressed: _askLocation,
           ),
           const SizedBox(height: 14),
         ];
@@ -281,8 +323,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
         return [
           Text('Rejoins des groupes', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
-          Text('Tu pourras en changer à tout moment.',
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            'Tu pourras en changer à tout moment.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 12),
           for (final g in _groups)
             Card(
@@ -293,7 +337,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   on == true ? _groupIds.add(g['id'] as int) : _groupIds.remove(g['id'] as int);
                 }),
                 title: Text('${g['icon']}  ${g['name']}'),
-                subtitle: Text('${g['base_members']} membres'),
+                subtitle: Text('${g['members']} membre(s)'),
               ),
             ),
         ];
@@ -309,8 +353,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
           children: [
             const Text('🎉', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 12),
-            Text('Bienvenue ${_name.text.trim().split(' ').first} !',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Bienvenue ${_name.text.trim().split(' ').first} !',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 4),
             const Text('+100 pts', style: TextStyle(color: AppColors.gold, fontSize: 18)),
           ],

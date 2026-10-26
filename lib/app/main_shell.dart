@@ -29,6 +29,10 @@ class _MainShellState extends State<MainShell> {
     _argRead = true;
     final arg = ModalRoute.of(context)?.settings.arguments;
     if (arg is int) _index = arg;
+    // Module 1 : sortie interrompue a reprendre (apres le premier affichage)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ActivitiesRoutes.onAppStart(context);
+    });
   }
 
   @override

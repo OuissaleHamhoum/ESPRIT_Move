@@ -9,8 +9,9 @@ import '../models/facility.dart';
 
 /// BK-02 (reserver) et BK-04 (changer) : choix du jour (7 jours) + creneau.
 ///   SlotPickerScreen(facility: f)                -> nouvelle reservation
-///   SlotPickerScreen(facility: f, booking: b)    -> changer une reservation
-/// Un creneau deja pris est barre et non cliquable.
+///   SlotPickerScreen(facility: f, booking: b)    -> deplacer une reservation
+/// Les creneaux viennent des horaires du terrain (definis par l'admin).
+/// Un creneau pris ou deja commence est barre et non cliquable.
 class SlotPickerScreen extends StatefulWidget {
   final Facility facility;
   final Booking? booking;
@@ -25,8 +26,10 @@ class _SlotPickerScreenState extends State<SlotPickerScreen> {
   int _dayIndex = 0;
   String? _slot;
   Set<String> _taken = {};
+  bool _saving = false;
 
   bool get _isChange => widget.booking != null;
+  Facility get _f => widget.facility;
 
   @override
   void initState() {
@@ -39,7 +42,7 @@ class _SlotPickerScreenState extends State<SlotPickerScreen> {
     if (b != null) {
       final idx = _days.indexWhere((d) => Fmt.dbDate(d) == b.date);
       if (idx >= 0) _dayIndex = idx;
-      _slot = b.slot;
+      if (_f.slots.contains(b.slot)) _slot = b.slot;
     }
     _loadTaken();
   }
@@ -47,48 +50,67 @@ class _SlotPickerScreenState extends State<SlotPickerScreen> {
   String get _date => Fmt.dbDate(_days[_dayIndex]);
 
   Future<void> _loadTaken() async {
-    final t = await BookingDao.takenSlots(widget.facility.id, _date,
-        excludeBookingId: widget.booking?.id);
+    final t = await BookingDao.takenSlots(_f, _date, excludeBookingId: widget.booking?.id);
     if (!mounted) return;
     setState(() {
       _taken = t;
-      if (_slot != null && t.contains(_slot)) _slot = null; // plus disponible
+      if (_slot != null && (t.contains(_slot) || _isPast(_slot!))) _slot = null;
     });
   }
 
-  /// Un creneau deja passe aujourd'hui n'est plus reservable.
-  bool _isPast(String slot) {
-    if (_dayIndex != 0) return false;
-    final hour = int.parse(slot.substring(0, 2));
-    return hour <= DateTime.now().hour;
-  }
+  /// Un creneau deja commence n'est plus reservable.
+  bool _isPast(String slot) => !Slots.at(_date, slot).isAfter(DateTime.now());
 
   Future<void> _confirm() async {
-    if (_slot == null) {
-      AppSnack.show(context, 'Choisissez un créneau', error: true);
+    if (_slot == null || _taken.contains(_slot) || _isPast(_slot!)) {
+      setState(() => _slot = null);
+      AppSnack.show(context, 'Choisissez un créneau disponible', error: true);
       return;
     }
-    final bool ok = _isChange
-        ? await BookingDao.update(widget.booking!, _date, _slot!)
-        : await BookingDao.insert(widget.facility.id, Session.userId!, _date, _slot!);
+    setState(() => _saving = true);
+    final result = _isChange
+        ? await BookingDao.move(widget.booking!, _f, _date, _slot!)
+        : await BookingDao.book(_f, Session.userId!, _date, _slot!);
     if (!mounted) return;
-    if (!ok) {
-      AppSnack.show(context, 'Ce créneau vient d’être pris', error: true);
-      _loadTaken();
+    setState(() => _saving = false);
+
+    if (result == BookingResult.ok) {
+      AppSnack.show(context, _isChange ? 'Réservation modifiée ✅' : 'Réservation confirmée ✅');
+      Navigator.pop(context); // retour a BK-01
       return;
     }
-    // BK-03 : confirmation
-    AppSnack.show(context, _isChange ? 'Réservation modifiée ✅' : 'Réservation confirmée ✅');
-    Navigator.pop(context); // retour a BK-01
+    AppSnack.show(context, _message(result), error: true);
+    _loadTaken();
+  }
+
+  String _message(BookingResult r) {
+    switch (r) {
+      case BookingResult.slotTaken:
+        return 'Ce créneau vient d’être pris';
+      case BookingResult.userConflict:
+        return 'Vous avez déjà une réservation sur ce créneau horaire';
+      case BookingResult.tooMany:
+        return 'Maximum ${BookingDao.maxUpcomingPerUser} réservations à venir';
+      case BookingResult.closed:
+        return 'Ce terrain est fermé par l’administration';
+      case BookingResult.past:
+        return 'Ce créneau a déjà commencé';
+      case BookingResult.ok:
+        return '';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final slots = _f.slots;
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.facility.icon} ${widget.facility.name}')),
+      appBar: AppBar(title: Text('${_f.icon} ${_f.name}')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Text('${_f.placeName} · ${_f.scheduleLabel}',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 16),
           Text('Jour', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 8),
           SizedBox(
@@ -111,18 +133,24 @@ class _SlotPickerScreenState extends State<SlotPickerScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          Text('Créneau (2 h)', style: Theme.of(context).textTheme.bodySmall),
+          Text('Créneau (${Facility.slotLabel(_f.slotMinutes)})',
+              style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 8),
+          if (slots.every((s) => _taken.contains(s) || _isPast(s)))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Plus aucun créneau libre ce jour-là.',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ),
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: [
-              for (final s in Slots.all) _slotButton(s),
-            ],
+            children: [for (final s in slots) _slotButton(s)],
           ),
           const SizedBox(height: 28),
           AppButton(
             label: _isChange ? 'Confirmer le changement' : 'Confirmer la réservation',
+            loading: _saving,
             onPressed: _confirm,
           ),
         ],
@@ -133,11 +161,12 @@ class _SlotPickerScreenState extends State<SlotPickerScreen> {
   Widget _slotButton(String s) {
     final disabled = _taken.contains(s) || _isPast(s);
     final selected = _slot == s;
+    final end = Slots.format(Slots.at(_date, s).add(Duration(minutes: _f.slotMinutes)));
     return InkWell(
       onTap: disabled ? null : () => setState(() => _slot = s),
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        width: 100,
+        width: 120,
         height: 48,
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -145,11 +174,10 @@ class _SlotPickerScreenState extends State<SlotPickerScreen> {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
-          s,
+          '$s - $end',
           style: TextStyle(
             color: selected ? Colors.white : (disabled ? AppColors.grey : null),
-            // creneau pris = barre
-            decoration: disabled ? TextDecoration.lineThrough : null,
+            decoration: disabled ? TextDecoration.lineThrough : null, // pris = barre
           ),
         ),
       ),

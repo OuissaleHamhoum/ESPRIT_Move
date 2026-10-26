@@ -37,6 +37,12 @@ class CampusEvent {
   bool get isCancelled => status == 'cancelled';
   bool get isFull => participants >= capacity; // regle : "Complet"
 
+  /// Date + heure de debut de l'evenement.
+  DateTime get startsAt => DateTime.parse('${date}T$time');
+
+  /// Deja commence / termine : on ne peut plus s'inscrire.
+  bool get isPast => startsAt.isBefore(DateTime.now());
+
   factory CampusEvent.fromMap(Map<String, dynamic> m) => CampusEvent(
         id: m['id'] as int,
         title: m['title'] as String,
@@ -74,7 +80,7 @@ class CampusGroup {
 }
 
 /// Resultat d'une tentative d'inscription a un evenement.
-enum JoinResult { ok, full, cancelled, alreadyJoined }
+enum JoinResult { ok, full, cancelled, alreadyJoined, past }
 
 class EventSports {
   static const Map<String, String> emoji = {

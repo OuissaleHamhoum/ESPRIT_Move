@@ -3,6 +3,7 @@ import '../../../core/utils/format.dart';
 import '../models/activity.dart';
 
 /// Une ligne de l'historique : pictogramme, titre, date, distance, duree.
+/// Dans le fil des amis, le nom de l'auteur precede la date.
 class ActivityTile extends StatelessWidget {
   final Activity activity;
   final VoidCallback onTap;
@@ -17,7 +18,11 @@ class ActivityTile extends StatelessWidget {
             style: const TextStyle(fontSize: 28)),
         title: Text(activity.title,
             style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(Fmt.shortDate(activity.date)),
+        subtitle: Text([
+          if (activity.authorName != null) activity.authorName!, // fil des amis
+          Fmt.shortDate(activity.date),
+          if (activity.authorName == null && !activity.shared) '🔒 privée',
+        ].join(' · ')),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,

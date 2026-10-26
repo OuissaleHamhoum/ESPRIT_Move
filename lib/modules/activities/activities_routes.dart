@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/app_routes.dart';
+import '../../core/session/session.dart';
+import 'tracking/draft_recovery.dart';
 import 'screens/activities_list_screen.dart';
 import 'screens/rec_choose_screen.dart';
 
@@ -15,4 +17,9 @@ class ActivitiesRoutes {
 
   /// Contenu de l'onglet "Activites" (utilise par MainShell)
   static Widget get tab => const ActivitiesListScreen();
+
+  /// Au demarrage (MainShell) : propose de reprendre une sortie interrompue.
+  static Future<void> onAppStart(BuildContext context) async {
+    if (!Session.isGuest) await DraftRecovery.check(context);
+  }
 }

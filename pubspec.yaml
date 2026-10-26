@@ -15,6 +15,15 @@ dependencies:
   path: ^1.9.0             # construire le chemin du fichier .db
   crypto: ^3.0.3           # hacher les mots de passe (sha256)
   shared_preferences: ^2.2.3  # memoriser l'utilisateur connecte + le theme
+  sqflite_common_ffi_web: ^1.2.0
+  geolocator: ^14.1.1
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  image_picker: ^1.2.4
+  share_plus: ^13.3.1
+  path_provider: ^2.1.6
+  permission_handler: ^12.0.1
+  sensors_plus: ^7.1.1
 
 dev_dependencies:
   flutter_test:

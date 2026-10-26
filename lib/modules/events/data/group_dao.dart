@@ -3,12 +3,12 @@ import '../models/campus_event.dart';
 
 /// Acces SQLite pour les groupes du campus.
 class GroupDao {
-  /// Tous les groupes. Nb de membres = membres de base (demo) + inscrits.
+  /// Tous les groupes avec leur nombre reel de membres.
   static Future<List<CampusGroup>> getAll(int? userId) async {
     final db = await AppDatabase.db;
     final rows = await db.rawQuery('''
       SELECT g.id, g.name, g.icon,
-        g.base_members + (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS members,
+        (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS members,
         (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id AND gm.user_id = ?) AS joined
       FROM campus_groups g ORDER BY g.id
     ''', [userId ?? -1]);

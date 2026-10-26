@@ -118,6 +118,7 @@ class EventDao {
     final e = await getById(eventId, userId);
     if (e == null || e.isCancelled) return JoinResult.cancelled;
     if (e.joined) return JoinResult.alreadyJoined;
+    if (e.isPast) return JoinResult.past;
     if (e.isFull) return JoinResult.full;
     await db.insert('event_participants', {'event_id': eventId, 'user_id': userId});
     return JoinResult.ok;

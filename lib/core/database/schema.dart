@@ -18,7 +18,7 @@ class Schema {
       campus TEXT DEFAULT '',
       card_number TEXT DEFAULT '',
       filiere TEXT DEFAULT '',
-      card_verified INTEGER DEFAULT 0,      -- 1 = carte etudiante verifiee
+      card_verified INTEGER DEFAULT 0,      -- 0 = en attente, 1 = validee, -1 = refusee (admin)
       interests TEXT DEFAULT '',            -- "Running,Football,Yoga"
       role TEXT DEFAULT 'student',          -- 'student' ou 'admin'
       points INTEGER DEFAULT 0,
@@ -65,14 +65,26 @@ class Schema {
     CREATE TABLE activities(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
-      type TEXT NOT NULL,                   -- Course, Vélo, Marche, Muscu, Football, Natation
+      type TEXT NOT NULL,                   -- Course, Marche, Vélo, Randonnée, Muscu...
       title TEXT NOT NULL,
       distance_km REAL DEFAULT 0,
-      duration_min INTEGER DEFAULT 0,
+      duration_min INTEGER DEFAULT 0,       -- temps en mouvement (min)
       notes TEXT DEFAULT '',
       date TEXT NOT NULL,                   -- yyyy-MM-dd
+      route TEXT DEFAULT '',                -- trace GPS en JSON [[lat,lng],...]
+      start_time TEXT,                      -- v4 : ISO 8601
+      end_time TEXT,
+      elapsed_s INTEGER,                    -- pauses comprises
+      moving_s INTEGER,                     -- temps en mouvement
+      max_speed REAL,                       -- m/s, NULL si pas fiable
+      elev_gain REAL,                       -- m, NULL si pas fiable
+      splits TEXT DEFAULT '[]',             -- [[km, metres, secondes],...]
+      photos TEXT DEFAULT '[]',             -- chemins prives des photos
+      shared INTEGER DEFAULT 1,             -- v5 : 1 = visible par les amis
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     )''',
+    _activitiesIndex,
+    _friendships,
 
     // ---------------- MODULE 3 : Evenements et groupes ----------------
     '''
@@ -102,8 +114,7 @@ class Schema {
     CREATE TABLE campus_groups(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      icon TEXT DEFAULT '🏃',
-      base_members INTEGER DEFAULT 0        -- membres "deja inscrits" (demo)
+      icon TEXT DEFAULT '🏃'
     )''',
     '''
     CREATE TABLE group_members(
@@ -119,8 +130,14 @@ class Schema {
     CREATE TABLE facilities(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
+      sport TEXT NOT NULL,                  -- Padel, Football, Basket... (FacilitySports)
       place_id INTEGER NOT NULL,
       icon TEXT DEFAULT '🏟️',
+      description TEXT DEFAULT '',
+      open_hour INTEGER DEFAULT 8,          -- ouverture (heure pleine)
+      close_hour INTEGER DEFAULT 22,        -- fermeture (heure pleine)
+      slot_minutes INTEGER DEFAULT 60,      -- duree d'un creneau : 60, 90 ou 120
+      active INTEGER DEFAULT 1,             -- 0 = ferme : plus reservable
       FOREIGN KEY(place_id) REFERENCES places(id)
     )''',
     '''
@@ -129,8 +146,12 @@ class Schema {
       facility_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
       date TEXT NOT NULL,                   -- yyyy-MM-dd
-      slot TEXT NOT NULL,                   -- "08:00" (creneaux de 2 h)
-      status TEXT DEFAULT 'confirmed',
+      slot TEXT NOT NULL,                   -- heure de debut "HH:mm"
+      duration_min INTEGER NOT NULL,        -- duree au moment de la reservation
+      status TEXT DEFAULT 'confirmed',      -- 'confirmed' ou 'cancelled'
+      cancelled_by TEXT,                    -- 'user' ou 'admin'
+      cancel_reason TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
       FOREIGN KEY(facility_id) REFERENCES facilities(id),
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     )''',
@@ -176,5 +197,54 @@ class Schema {
       icon TEXT DEFAULT '🎁',
       cost INTEGER NOT NULL
     )''',
+
+    // ---------------- COMMUN : notifications enregistrees ----------------
+    // Ex. reservation annulee par l'administration, carte etudiante validee.
+    '''
+    CREATE TABLE notifications(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )''',
   ];
+
+  static const _activitiesIndex =
+      'CREATE INDEX IF NOT EXISTS idx_activities_user_date ON activities(user_id, date)';
+
+  /// Migrations SANS perte de donnees : version -> requetes a executer.
+  /// (Les colonnes ajoutees ici figurent aussi dans [tables] pour les bases neuves.)
+  static const Map<int, List<String>> migrations = {
+    4: [
+      'ALTER TABLE activities ADD COLUMN start_time TEXT',
+      'ALTER TABLE activities ADD COLUMN end_time TEXT',
+      'ALTER TABLE activities ADD COLUMN elapsed_s INTEGER',
+      'ALTER TABLE activities ADD COLUMN moving_s INTEGER',
+      'ALTER TABLE activities ADD COLUMN max_speed REAL',
+      'ALTER TABLE activities ADD COLUMN elev_gain REAL',
+      "ALTER TABLE activities ADD COLUMN splits TEXT DEFAULT '[]'",
+      "ALTER TABLE activities ADD COLUMN photos TEXT DEFAULT '[]'",
+      _activitiesIndex,
+    ],
+    5: [
+      'ALTER TABLE activities ADD COLUMN shared INTEGER DEFAULT 1',
+      _friendships,
+    ],
+  };
+
+  /// Amis (module 1) : une ligne par demande, de [user_id] vers [friend_id].
+  /// status 'pending' = en attente, 'accepted' = amis (dans les deux sens).
+  static const _friendships = '''
+    CREATE TABLE IF NOT EXISTS friendships(
+      user_id INTEGER NOT NULL,
+      friend_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(user_id, friend_id),
+      CHECK(user_id <> friend_id),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(friend_id) REFERENCES users(id) ON DELETE CASCADE
+    )''';
 }

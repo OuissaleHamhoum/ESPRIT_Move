@@ -133,9 +133,11 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
           ],
           const SizedBox(height: 10),
           Wrap(spacing: 8, children: [
-            c.joined
-                ? OutlinedButton(onPressed: () => _toggleJoin(c), child: const Text('Quitter'))
-                : ElevatedButton(onPressed: () => _toggleJoin(c), child: const Text('Participer')),
+            // L'administrateur gere les defis mais n'y participe pas
+            if (!admin)
+              c.joined
+                  ? OutlinedButton(onPressed: () => _toggleJoin(c), child: const Text('Quitter'))
+                  : ElevatedButton(onPressed: () => _toggleJoin(c), child: const Text('Participer')),
             OutlinedButton(
                 onPressed: () => _push(LeaderboardScreen(challenge: c)),
                 child: const Text('Classement')),

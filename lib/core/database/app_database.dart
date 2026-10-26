@@ -1,13 +1,15 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart'
     show sqfliteFfiInit, databaseFactoryFfi;
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart'
+    show databaseFactoryFfiWeb;
 import 'schema.dart';
 import 'seed_data.dart';
 
-/// Ouvre (une seule fois) la base SQLite locale du telephone.
+/// Ouvre (une seule fois) la base SQLite locale du telephone ou web.
 ///
 /// Le fichier "esprit_move.db" est cree automatiquement dans le stockage prive
 /// de l'application : pas de serveur, pas d'internet, pas de configuration.
@@ -17,7 +19,7 @@ import 'seed_data.dart';
 ///   final rows = await db.query('activities');
 class AppDatabase {
   /// Incrementer ce numero quand le schema change (voir schema.dart).
-  static const int dbVersion = 1;
+  static const int dbVersion = 5; // v4 : suivi GPS detaille, v5 : amis (migrations sans perte)
   static const String _fileName = 'esprit_move.db';
 
   static Database? _db;
@@ -28,17 +30,21 @@ class AppDatabase {
   }
 
   /// Sur Android / iOS : sqflite fonctionne directement.
-  /// Sur Windows / Linux / macOS (test sur PC) : on active le moteur FFI.
-  /// Le navigateur (Chrome, Edge) n'est PAS supporte.
+  /// Sur Windows / Linux / macOS : on active le moteur FFI.
+  /// Sur le navigateur (Chrome, Edge) : sqflite_common_ffi_web.
   static bool _factoryReady = false;
   static void _initFactory() {
     if (_factoryReady) return;
     _factoryReady = true;
-    if (kIsWeb) return;
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    if (kIsWeb) {
+      databaseFactory = databaseFactoryFfiWeb;
+    } else if (defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
+    // Android / iOS : sqflite natif, rien a faire.
   }
 
   static Future<Database> _open() async {
@@ -54,31 +60,50 @@ class AppDatabase {
         for (final sql in Schema.tables) {
           await db.execute(sql);
         }
-        await SeedData.run(db); // donnees de demonstration
+        await SeedData.run(db); // donnees de depart (compte admin...)
       },
-      // En developpement : on repart d'une base neuve si la version change.
       onUpgrade: (db, oldV, newV) async {
-        await _dropAll(db);
-        for (final sql in Schema.tables) {
-          await db.execute(sql);
+        // v1, v2 contenaient des donnees de demo : on repart d'une base neuve.
+        if (oldV < 3) {
+          await _dropAll(db);
+          for (final sql in Schema.tables) {
+            await db.execute(sql);
+          }
+          await SeedData.run(db);
+          return;
         }
-        await SeedData.run(db);
+        // v3 et plus : migrations incrementales, les donnees sont conservees.
+        for (var v = oldV + 1; v <= newV; v++) {
+          for (final sql in Schema.migrations[v] ?? const <String>[]) {
+            await db.execute(sql);
+          }
+        }
       },
     );
   }
 
+  /// Supprime toutes les tables. onUpgrade s'execute dans une transaction,
+  /// ou "PRAGMA foreign_keys = OFF" est sans effet : on supprime donc
+  /// d'abord les tables qui referencent les autres (enfants avant parents).
   static Future<void> _dropAll(Database db) async {
-    final tables = await db.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' "
+    final rows = await db.rawQuery(
+        "SELECT name, sql FROM sqlite_master WHERE type='table' "
         "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%'");
-    await db.execute('PRAGMA foreign_keys = OFF');
-    for (final t in tables) {
-      await db.execute('DROP TABLE IF EXISTS ${t['name']}');
+    final remaining = {for (final r in rows) r['name'] as String: (r['sql'] as String? ?? '')};
+    while (remaining.isNotEmpty) {
+      // Tables qu'aucune autre table restante ne reference
+      final free = remaining.keys
+          .where((t) => !remaining.entries
+              .any((e) => e.key != t && e.value.contains('REFERENCES $t(')))
+          .toList();
+      for (final t in free.isEmpty ? remaining.keys.toList() : free) {
+        await db.execute('DROP TABLE IF EXISTS $t');
+        remaining.remove(t);
+      }
     }
-    await db.execute('PRAGMA foreign_keys = ON');
   }
 
-  /// Outil de dev : efface tout et recree la base avec les donnees de demo.
+  /// Outil de dev : efface tout et recree la base (donnees de depart).
   static Future<void> reset() async {
     final path = join(await getDatabasesPath(), _fileName);
     await _db?.close();

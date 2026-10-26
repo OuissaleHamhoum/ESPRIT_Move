@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../data/chat_dao.dart';
 import '../models/chat_models.dart';
 import 'chat_room_screen.dart';
@@ -13,6 +14,7 @@ class ChatRoomsScreen extends StatefulWidget {
 
 class _ChatRoomsScreenState extends State<ChatRoomsScreen> {
   List<ChatRoom> _rooms = [];
+  bool _loading = true;
 
   @override
   void initState() {
@@ -22,14 +24,30 @@ class _ChatRoomsScreenState extends State<ChatRoomsScreen> {
 
   Future<void> _load() async {
     final r = await ChatDao.rooms();
-    if (mounted) setState(() => _rooms = r);
+    if (mounted) {
+      setState(() {
+        _rooms = r;
+        _loading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Messages')),
-      body: ListView(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _rooms.isEmpty
+              ? const EmptyState(emoji: '💬', message: 'Aucun salon de discussion.')
+              : _list(),
+    );
+  }
+
+  Widget _list() {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           for (final r in _rooms)

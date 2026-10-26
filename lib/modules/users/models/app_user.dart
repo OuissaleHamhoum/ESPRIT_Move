@@ -8,7 +8,7 @@ class AppUser {
   final String campus;
   final String cardNumber;
   final String filiere;
-  final bool cardVerified;
+  final int cardStatus; // 1 validee, 0 en attente, -1 refusee (par l'admin)
   final Set<String> interests; // en base : "Running,Football,Yoga"
   final String role; // 'student' ou 'admin'
   final int points;
@@ -22,7 +22,7 @@ class AppUser {
     this.campus = '',
     this.cardNumber = '',
     this.filiere = '',
-    this.cardVerified = false,
+    this.cardStatus = 0,
     this.interests = const {},
     this.role = 'student',
     this.points = 0,
@@ -30,6 +30,13 @@ class AppUser {
   });
 
   bool get isAdmin => role == 'admin';
+  bool get cardVerified => cardStatus == 1;
+
+  String get cardStatusLabel => cardStatus == 1
+      ? 'Carte validée'
+      : cardStatus == -1
+          ? 'Carte refusée'
+          : 'Carte en attente de validation';
 
   /// Prenom = premier mot du nom ("Mariem Ben Ali" -> "Mariem")
   String get firstName => name.trim().split(' ').first;
@@ -44,7 +51,7 @@ class AppUser {
       campus: (m['campus'] as String?) ?? '',
       cardNumber: (m['card_number'] as String?) ?? '',
       filiere: (m['filiere'] as String?) ?? '',
-      cardVerified: m['card_verified'] == 1,
+      cardStatus: (m['card_verified'] as int?) ?? 0,
       interests: raw.isEmpty ? <String>{} : raw.split(',').toSet(),
       role: (m['role'] as String?) ?? 'student',
       points: (m['points'] as int?) ?? 0,

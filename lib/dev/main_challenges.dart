@@ -1,5 +1,5 @@
 // MEMBRE 5 : flutter run -t lib/dev/main_challenges.dart
-// loginAsUserId: 2 -> administrateur (pour tester + Defi, + Badge, dashboard).
+// loginAsUserId: 1 -> administrateur (pour tester + Defi, + Badge, dashboard).
 import '../core/app_routes.dart';
 import '../modules/challenges/challenges_routes.dart';
 import 'dev_runner.dart';
@@ -11,5 +11,5 @@ void main() => runModule(
         AppRoutes.main: (_) => ChallengesRoutes.homeTab,
       },
       initialRoute: AppRoutes.main,
-      loginAsUserId: 1,
+      loginAsUserId: 0, // creez un compte etudiant depuis l'app, ou 1 = admin
     );

@@ -5,13 +5,12 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/guest_gate.dart';
 import '../data/event_dao.dart';
 import '../models/campus_event.dart';
-import '../widgets/campus_map.dart';
 import '../widgets/event_tile.dart';
 import 'event_detail_screen.dart';
 import 'event_form_screen.dart';
 
-/// EV-01 (liste) + EV-02 (carte) : onglet "Evenements".
-/// Un bouton segmente bascule entre "Liste" et "Carte".
+/// EV-01 : onglet "Evenements" (liste). Aussi ouvert par l'admin
+/// (route AppRoutes.adminEvents) pour moderer les evenements.
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
 
@@ -22,7 +21,6 @@ class EventsScreen extends StatefulWidget {
 class _EventsScreenState extends State<EventsScreen> {
   List<CampusEvent> _events = [];
   bool _loading = true;
-  bool _showMap = false;
 
   @override
   void initState() {
@@ -67,16 +65,9 @@ class _EventsScreenState extends State<EventsScreen> {
               children: [
                 Row(children: [
                   Expanded(
-                    child: SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment(value: false, label: Text('Liste')),
-                        ButtonSegment(value: true, label: Text('Carte')),
-                      ],
-                      selected: {_showMap},
-                      onSelectionChanged: (s) => setState(() => _showMap = s.first),
-                    ),
+                    child: Text('${_events.length} événement(s)',
+                        style: Theme.of(context).textTheme.titleMedium),
                   ),
-                  const SizedBox(width: 10),
                   ElevatedButton(onPressed: _create, child: const Text('+ Créer')),
                 ]),
                 const SizedBox(height: 12),
@@ -91,8 +82,6 @@ class _EventsScreenState extends State<EventsScreen> {
                     ),
                   )
                 else ...[
-                  if (_showMap) CampusMap(events: _events, onPinTap: _openDetail),
-                  const SizedBox(height: 8),
                   for (final e in _events) EventTile(event: e, onTap: () => _openDetail(e)),
                 ],
                 const SizedBox(height: 60),

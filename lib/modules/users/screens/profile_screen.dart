@@ -75,14 +75,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Navigator.pushNamedAndRemoveUntil(context, AppRoutes.signIn, (r) => false);
   }
 
-  /// Mode demo : devenir administrateur pour tester le module 5.
-  Future<void> _toggleAdmin(bool on) async {
-    final role = on ? 'admin' : 'student';
-    await UserDao.setRole(Session.userId!, role);
-    Session.role = role;
-    _load();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -107,17 +99,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // En-tete : avatar, nom, e-mail, ville
+        // En-tete : avatar, nom, e-mail, filiere, campus, ville
         Card(
           child: ListTile(
             contentPadding: const EdgeInsets.all(16),
             leading: Avatar(name: u.name, radius: 26),
-            title: Text(u.name,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            subtitle: Text('${u.email}\n${u.city}'),
+            title: Row(children: [
+              Flexible(
+                child: Text(u.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+              if (u.cardVerified) ...[
+                const SizedBox(width: 6),
+                const Icon(Icons.verified, size: 18, color: AppColors.green),
+              ],
+            ]),
+            subtitle: Text([
+              u.email,
+              [u.filiere, u.campus].where((s) => s.isNotEmpty).join(' · '),
+              [u.city, '${u.points} pts', if (u.isAdmin) 'Administrateur']
+                  .where((s) => s.isNotEmpty)
+                  .join(' · '),
+            ].where((s) => s.isNotEmpty).join('\n')),
             isThreeLine: true,
           ),
         ),
+        // Carte etudiante : validee / en attente / refusee (par l'admin)
+        if (!u.isAdmin)
+          Card(
+            child: ListTile(
+              leading: Icon(
+                u.cardStatus == 1
+                    ? Icons.verified
+                    : u.cardStatus == -1
+                        ? Icons.error_outline
+                        : Icons.hourglass_top,
+                color: u.cardStatus == 1
+                    ? AppColors.green
+                    : u.cardStatus == -1
+                        ? AppColors.red
+                        : AppColors.gold,
+              ),
+              title: Text(u.cardStatusLabel),
+              subtitle: Text(u.cardStatus == -1
+                  ? 'N° ${u.cardNumber} · corrigez-le dans « Modifier le profil »'
+                  : 'N° ${u.cardNumber}'),
+            ),
+          ),
         Row(children: [
           Expanded(child: StatTile(value: _stats.km.toStringAsFixed(1), label: 'km total')),
           Expanded(child: StatTile(value: '${_stats.activities}', label: 'activités')),
@@ -183,16 +212,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: () => Navigator.pushNamed(context, AppRoutes.chatRooms))),
         ]),
         const SizedBox(height: 12),
-        // Mode demo + theme
-        Card(
-          child: SwitchListTile(
-            activeThumbColor: AppColors.red,
-            title: const Text('Rôle administrateur'),
-            subtitle: const Text('Mode démo : gérer défis, badges et certificats'),
-            value: u.isAdmin,
-            onChanged: _toggleAdmin,
-          ),
-        ),
         Row(children: [
           Expanded(
               child: AppButton(
@@ -204,6 +223,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: AppButton(label: 'Se déconnecter', outlined: true, onPressed: _logout)),
         ]),
         const SizedBox(height: 10),
+        TextButton(
+          onPressed: () => Navigator.pushNamed(context, AppRoutes.changePassword),
+          child: const Text('Changer le mot de passe'),
+        ),
         TextButton(
           onPressed: _deleteAccount,
           child: const Text('Supprimer mon compte',

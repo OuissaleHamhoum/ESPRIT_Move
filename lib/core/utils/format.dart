@@ -43,4 +43,23 @@ class Fmt {
     final s = seconds % 60;
     return h > 0 ? '${two(h)}:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
   }
+
+  /// Allure : 318 s/km -> "5:18". "--" si inconnue.
+  static String paceSec(num? secPerKm) {
+    if (secPerKm == null || secPerKm <= 0 || secPerKm >= 3600) return '--';
+    final s = secPerKm.round();
+    return '${s ~/ 60}:${two(s % 60)}';
+  }
+
+  /// Vitesse m/s -> allure "5:18" (min/km). "--" a l'arret.
+  static String paceFromSpeed(double mps) => mps < 0.4 ? '--' : paceSec(1000 / mps);
+
+  /// m/s -> "12.4" (km/h). "--" si inconnue.
+  static String kmh(double? mps) => mps == null ? '--' : (mps * 3.6).toStringAsFixed(1);
+
+  /// DateTime -> "oct."
+  static String month(DateTime d) => _months[d.month - 1];
+
+  /// DateTime -> "17:30"
+  static String hm(DateTime d) => '${two(d.hour)}:${two(d.minute)}';
 }

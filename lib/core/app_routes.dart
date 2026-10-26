@@ -20,6 +20,7 @@ class AppRoutes {
   static const editProfile = '/profile/edit';
   static const beacon = '/beacon';
   static const chatRooms = '/chat';
+  static const changePassword = '/profile/password';
 
   // --- Module 1 : Activites ---
   static const recChoose = '/rec/choose';
@@ -27,6 +28,7 @@ class AppRoutes {
   // --- Module 3 : Evenements et groupes ---
   static const groups = '/groups';
   static const eventForm = '/events/form';
+  static const adminEvents = '/admin/events'; // liste des evenements (admin)
 
   // --- Module 4 : Reservation ---
   static const booking = '/booking';

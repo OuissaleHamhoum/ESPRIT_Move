@@ -80,11 +80,15 @@ class HomeDao {
 
     // Fil de la communaute : 5 dernieres activites de tous les etudiants
     final feedRows = await db.rawQuery(
-        'SELECT a.title, a.distance_km, a.duration_min, u.name FROM activities a '
+        'SELECT a.type, a.title, a.distance_km, a.duration_min, u.name FROM activities a '
         'JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 5');
+    const icons = {
+      'Course': '🏃', 'Vélo': '🚴', 'Marche': '🚶',
+      'Muscu': '🏋️', 'Football': '⚽', 'Natation': '🏊',
+    };
     final feed = feedRows
-        .map((r) =>
-            '${r['name']} · ${r['title']} (${(r['distance_km'] as num).toStringAsFixed(1)} km, ${r['duration_min']} min)')
+        .map((r) => FeedItem(icons[r['type']] ?? '🏅',
+            '${r['name']} · ${r['title']} (${(r['distance_km'] as num).toStringAsFixed(1)} km, ${r['duration_min']} min)'))
         .toList();
 
     return HomeData(
@@ -124,7 +128,6 @@ class HomeDao {
         list.add('🏅 Badge débloqué : ${r['name']}');
       }
     }
-    list.add('🎟️ Offre partenaire : -20 % chez GymPro Tunis');
     return list;
   }
 
@@ -139,15 +142,58 @@ class HomeDao {
     final acts = await count('SELECT COUNT(*) AS v FROM activities WHERE date >= ?', [since]);
     final joins = await count('SELECT COUNT(*) AS v FROM event_participants');
     final seats = await count('SELECT COALESCE(SUM(capacity),0) AS v FROM events');
-    final bookings = await count("SELECT COUNT(*) AS v FROM bookings WHERE status = 'confirmed'");
-    final facilities = await count('SELECT COUNT(*) AS v FROM facilities');
+    // Reservations des 7 prochains jours / creneaux offerts par les terrains ouverts
+    final until = Fmt.dbDate(DateTime.now().add(const Duration(days: 6)));
+    final bookings = await count(
+        "SELECT COUNT(*) AS v FROM bookings WHERE status = 'confirmed' AND date >= ? AND date <= ?",
+        [Fmt.dbDate(DateTime.now()), until]);
+    var slotsPerWeek = 0;
+    for (final f in await db.query('facilities',
+        columns: ['open_hour', 'close_hour', 'slot_minutes'], where: 'active = 1')) {
+      final minutes = ((f['close_hour'] as int) - (f['open_hour'] as int)) * 60;
+      slotsPerWeek += (minutes ~/ (f['slot_minutes'] as int)) * 7;
+    }
 
     double ratio(num a, num b) => b <= 0 ? 0 : (a / b).clamp(0.0, 1.0).toDouble();
     return [
-      ['Inscriptions ($users / objectif 100)', ratio(users, 100), users],
+      ['Comptes ($users / objectif 100)', ratio(users, 100), users],
       ['Activités sur 7 jours ($acts / objectif 50)', ratio(acts, 50), acts],
       ['Participation aux événements ($joins / $seats places)', ratio(joins, seats), joins],
-      ['Réservations ($bookings / ${facilities * 6 * 7} créneaux)', ratio(bookings, facilities * 6 * 7), bookings],
+      ['Occupation des terrains, 7 prochains jours ($bookings / $slotsPerWeek créneaux)',
+        ratio(bookings, slotsPerWeek), bookings],
     ];
+  }
+
+  /// Chiffres de l'accueil administrateur (lecture des autres modules).
+  static Future<AdminSummary> adminSummary() async {
+    final db = await AppDatabase.db;
+    Future<int> count(String sql, [List<Object?>? args]) async =>
+        (await db.rawQuery(sql, args)).first['v'] as int;
+    final now = DateTime.now();
+    final nowKey = '${Fmt.dbDate(now)} ${Fmt.two(now.hour)}:${Fmt.two(now.minute)}';
+
+    final todayRows = await db.rawQuery(
+        'SELECT b.slot, b.duration_min, f.name AS facility, f.icon, u.name AS user '
+        'FROM bookings b JOIN facilities f ON f.id = b.facility_id '
+        'JOIN users u ON u.id = b.user_id '
+        "WHERE b.status = 'confirmed' AND b.date = ? ORDER BY b.slot",
+        [Fmt.dbDate(now)]);
+
+    return AdminSummary(
+      students: await count("SELECT COUNT(*) AS v FROM users WHERE role = 'student'"),
+      pendingCards: await count(
+          "SELECT COUNT(*) AS v FROM users WHERE role = 'student' AND card_verified = 0"),
+      activeFacilities: await count('SELECT COUNT(*) AS v FROM facilities WHERE active = 1'),
+      upcomingBookings: await count(
+          "SELECT COUNT(*) AS v FROM bookings WHERE status = 'confirmed' "
+          "AND (date || ' ' || slot) > ?",
+          [nowKey]),
+      today: [
+        for (final r in todayRows)
+          FeedItem(
+              r['icon'] as String,
+              '${r['slot']} · ${r['facility']} · ${r['user']}'),
+      ],
+    );
   }
 }

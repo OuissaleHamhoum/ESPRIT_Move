@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/app_routes.dart';
+import 'screens/admin_home_screen.dart';
 import 'screens/badge_form_screen.dart';
 import 'screens/challenge_form_screen.dart';
 import 'screens/challenges_screen.dart';
@@ -21,4 +22,7 @@ class ChallengesRoutes {
 
   /// Contenu de l'onglet "Accueil" (utilise par MainShell)
   static Widget get homeTab => const HomeScreen();
+
+  /// Onglet "Accueil" de l'espace administrateur (utilise par AdminShell)
+  static Widget get adminHomeTab => const AdminHomeScreen();
 }

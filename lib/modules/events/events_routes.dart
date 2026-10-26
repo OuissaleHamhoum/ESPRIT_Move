@@ -9,6 +9,7 @@ class EventsRoutes {
   static Map<String, WidgetBuilder> get routes => {
         AppRoutes.groups: (_) => const GroupsScreen(),
         AppRoutes.eventForm: (_) => const EventFormScreen(),
+        AppRoutes.adminEvents: (_) => const EventsScreen(),
       };
 
   /// Contenu de l'onglet "Evenements" (utilise par MainShell)

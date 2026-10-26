@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>ESPRIT Move utilise votre position pour mesurer la distance et tracer vos sorties.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>ESPRIT Move utilise l’appareil photo pour ajouter des photos à vos sorties.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ESPRIT Move accède à vos photos pour les joindre à vos sorties.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

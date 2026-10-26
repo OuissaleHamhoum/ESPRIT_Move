@@ -23,8 +23,14 @@ class Session {
     userId = id;
     Session.name = name;
     Session.role = role;
+    final db = await AppDatabase.db;
+    final rows = await db.query('users',
+        columns: ['email'], where: 'id = ?', whereArgs: [id]);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('user_id', id);
+    // L'e-mail sert de verification : si la base est recreee, un ancien id
+    // ne doit jamais reconnecter quelqu'un d'autre (ex. l'admin).
+    if (rows.isNotEmpty) await prefs.setString('user_email', rows.first['email'] as String);
   }
 
   static Future<void> logout() async {
@@ -33,25 +39,29 @@ class Session {
     role = 'student';
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user_id');
+    await prefs.remove('user_email');
   }
 
-  /// Au demarrage : retrouve l'utilisateur memorise (si le compte existe encore).
+  /// Au demarrage : retrouve l'utilisateur memorise (si le compte existe
+  /// encore ET correspond au meme e-mail).
   static Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
     final id = prefs.getInt('user_id');
     if (id == null) return;
-    if (!await _load(id)) await logout();
+    final email = prefs.getString('user_email');
+    if (email == null || !await _load(id, email: email)) await logout();
   }
 
   /// Developpement isole : se connecte directement sans ecran de login.
-  /// 1 = etudiante Mariem, 2 = administrateur (voir seed_data.dart).
+  /// 1 = administrateur initial (voir seed_data.dart).
   static Future<void> devLogin(int id) async => _load(id);
 
-  static Future<bool> _load(int id) async {
+  static Future<bool> _load(int id, {String? email}) async {
     final db = await AppDatabase.db;
     final rows = await db.query('users',
-        columns: ['id', 'name', 'role'], where: 'id = ?', whereArgs: [id]);
+        columns: ['id', 'name', 'role', 'email'], where: 'id = ?', whereArgs: [id]);
     if (rows.isEmpty) return false;
+    if (email != null && rows.first['email'] != email) return false;
     userId = id;
     name = rows.first['name'] as String;
     role = rows.first['role'] as String;

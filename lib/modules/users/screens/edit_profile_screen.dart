@@ -6,7 +6,7 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/chip_selector.dart';
 import '../data/user_dao.dart';
 
-/// PRO-02 : modifier la ville, les centres d'interet et les contacts Beacon.
+/// PRO-02 : modifier le nom, le campus, la ville, les centres d'interet et les contacts Beacon.
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -18,9 +18,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   static const _options = [
     'Running', 'Football', 'Basket', 'Yoga', 'Muscu', 'Vélo', 'Natation', 'Tennis'
   ];
+  static const _campuses = ['Campus Ghazela', 'Campus Charguia'];
 
   final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
   final _city = TextEditingController();
+  final _cardNumber = TextEditingController();
+  String _initialCard = '';
+  int _cardStatus = 0;
+  String _campus = _campuses.first;
   final _newPhone = TextEditingController();
   final Set<String> _interests = {};
   final List<String> _phones = []; // 3 maximum
@@ -34,7 +40,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
+    _name.dispose();
     _city.dispose();
+    _cardNumber.dispose();
     _newPhone.dispose();
     super.dispose();
   }
@@ -46,7 +54,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final contacts = await UserDao.beaconContacts(uid);
     if (!mounted || user == null) return;
     setState(() {
+      _name.text = user.name;
+      if (_campuses.contains(user.campus)) _campus = user.campus;
       _city.text = user.city;
+      _cardNumber.text = _initialCard = user.cardNumber;
+      _cardStatus = user.cardStatus;
       _interests.addAll(user.interests);
       _phones.addAll(contacts.map((c) => c.phone));
       _ready = true;
@@ -57,6 +69,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final p = _newPhone.text.trim();
     if (p.length < 8) {
       AppSnack.show(context, 'Numéro invalide (8 chiffres min.)', error: true);
+      return;
+    }
+    if (_phones.contains(p)) {
+      AppSnack.show(context, 'Ce numéro est déjà dans la liste', error: true);
       return;
     }
     if (_phones.length >= 3) {
@@ -71,14 +87,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    final card = _cardNumber.text.trim();
+    final cardChanged = !Session.isAdmin && card != _initialCard;
+    if (cardChanged && await UserDao.cardNumberTaken(card, exceptUserId: Session.userId)) {
+      if (!mounted) return;
+      AppSnack.show(context, 'Ce numéro de carte est déjà utilisé', error: true);
+      return;
+    }
     await UserDao.updateProfile(
       userId: Session.userId!,
+      name: _name.text.trim(),
+      campus: _campus,
       city: _city.text.trim(),
       interests: _interests,
       beaconPhones: _phones,
+      cardNumber: Session.isAdmin ? null : card,
     );
+    Session.name = _name.text.trim();
     if (!mounted) return;
-    AppSnack.show(context, 'Profil mis à jour');
+    AppSnack.show(
+        context,
+        cardChanged
+            ? 'Profil mis à jour · nouvelle carte envoyée pour validation'
+            : 'Profil mis à jour');
     Navigator.pop(context); // retour au profil (PRO-01)
   }
 
@@ -94,9 +125,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   AppTextField(
+                      label: 'Nom complet',
+                      controller: _name,
+                      validator: (v) => AppTextField.notEmpty(v, 'Le nom est obligatoire')),
+                  Text('Campus', style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    initialValue: _campus,
+                    items: _campuses
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _campus = v!),
+                  ),
+                  const SizedBox(height: 14),
+                  AppTextField(
                       label: 'Ville',
                       controller: _city,
                       validator: (v) => AppTextField.notEmpty(v, 'La ville est obligatoire')),
+                  if (!Session.isAdmin)
+                    AppTextField(
+                      label: _cardStatus == 1
+                          ? 'N° de carte étudiante (validée — la modifier relance la validation)'
+                          : 'N° de carte étudiante',
+                      controller: _cardNumber,
+                      validator: (v) => AppTextField.notEmpty(v, 'Numéro obligatoire'),
+                    ),
                   Text('Centres d’intérêt', style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 6),
                   ChipSelector(

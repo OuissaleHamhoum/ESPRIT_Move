@@ -62,10 +62,16 @@ class _EventFormScreenState extends State<EventFormScreen> {
   }
 
   Future<void> _pickDate() async {
+    final today = DateTime.now();
+    final current = DateTime.tryParse(_date.text);
     final d = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
+      // en modification : on part de la date actuelle de l'evenement
+      initialDate:
+          current != null && !current.isBefore(DateTime(today.year, today.month, today.day))
+          ? current
+          : today,
+      firstDate: today,
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (d != null) _date.text = Fmt.dbDate(d);
@@ -73,7 +79,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
 
   Future<void> _pickTime() async {
     final t = await showTimePicker(
-        context: context, initialTime: const TimeOfDay(hour: 17, minute: 30));
+      context: context,
+      initialTime: const TimeOfDay(hour: 17, minute: 30),
+    );
     if (t != null) _time.text = '${Fmt.two(t.hour)}:${Fmt.two(t.minute)}';
   }
 
@@ -81,16 +89,39 @@ class _EventFormScreenState extends State<EventFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     final capacity = int.parse(_capacity.text.trim());
 
+    // Regles : pas d'evenement dans le passe, et pas moins de places que d'inscrits.
+    if (DateTime.parse('${_date.text}T${_time.text}').isBefore(DateTime.now())) {
+      AppSnack.show(context, 'La date et l’heure doivent être dans le futur', error: true);
+      return;
+    }
+    final joined = widget.event?.participants ?? 0;
+    if (capacity < joined) {
+      AppSnack.show(context, 'Déjà $joined inscrits : au moins $joined places', error: true);
+      return;
+    }
+
     if (_isEdit) {
-      await EventDao.update(widget.event!.id,
-          title: _title.text.trim(), sport: _sport, placeId: _placeId!,
-          date: _date.text, time: _time.text, capacity: capacity,
-          description: _description.text.trim());
+      await EventDao.update(
+        widget.event!.id,
+        title: _title.text.trim(),
+        sport: _sport,
+        placeId: _placeId!,
+        date: _date.text,
+        time: _time.text,
+        capacity: capacity,
+        description: _description.text.trim(),
+      );
     } else {
       await EventDao.insert(
-          title: _title.text.trim(), sport: _sport, placeId: _placeId!,
-          date: _date.text, time: _time.text, capacity: capacity,
-          description: _description.text.trim(), organizerId: Session.userId!);
+        title: _title.text.trim(),
+        sport: _sport,
+        placeId: _placeId!,
+        date: _date.text,
+        time: _time.text,
+        capacity: capacity,
+        description: _description.text.trim(),
+        organizerId: Session.userId!,
+      );
     }
     if (!mounted) return;
     AppSnack.show(context, _isEdit ? 'Événement modifié' : 'Événement publié');
@@ -107,46 +138,58 @@ class _EventFormScreenState extends State<EventFormScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             AppTextField(
-                label: 'Titre',
-                controller: _title,
-                validator: (v) => AppTextField.notEmpty(v, 'Le titre est obligatoire')),
+              label: 'Titre',
+              controller: _title,
+              validator: (v) => AppTextField.notEmpty(v, 'Le titre est obligatoire'),
+            ),
             Text('Sport', style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 4),
             DropdownButtonFormField<String>(
               initialValue: _sport,
               items: EventSports.all
-                  .map((s) => DropdownMenuItem(value: s, child: Text('${EventSports.iconOf(s)} $s')))
+                  .map(
+                    (s) => DropdownMenuItem(value: s, child: Text('${EventSports.iconOf(s)} $s')),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => _sport = v!),
             ),
             const SizedBox(height: 14),
             Text('Lieu', style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 4),
+            // Les lieux sont ceux des terrains crees par l'administration
             DropdownButtonFormField<int>(
               initialValue: _placeId,
-              items: _places.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))).toList(),
+              hint: const Text('Aucun lieu : l’administration doit ajouter des terrains'),
+              items: _places
+                  .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
+                  .toList(),
+              validator: (v) => v == null ? 'Choisissez un lieu' : null,
               onChanged: (v) => setState(() => _placeId = v),
             ),
             const SizedBox(height: 14),
-            Row(children: [
-              Expanded(
-                child: AppTextField(
+            Row(
+              children: [
+                Expanded(
+                  child: AppTextField(
                     label: 'Date',
                     controller: _date,
                     readOnly: true,
                     onTap: _pickDate,
-                    validator: (v) => AppTextField.notEmpty(v, 'Choisissez une date')),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: AppTextField(
+                    validator: (v) => AppTextField.notEmpty(v, 'Choisissez une date'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AppTextField(
                     label: 'Heure',
                     controller: _time,
                     readOnly: true,
                     onTap: _pickTime,
-                    validator: (v) => AppTextField.notEmpty(v, 'Choisissez une heure')),
-              ),
-            ]),
+                    validator: (v) => AppTextField.notEmpty(v, 'Choisissez une heure'),
+                  ),
+                ),
+              ],
+            ),
             AppTextField(
               label: 'Places',
               controller: _capacity,
